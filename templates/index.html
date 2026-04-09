@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Emotion Detector</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="blob-bg blob-1"></div>
+    <div class="blob-bg blob-2"></div>
+
+    <main class="container">
+        <header>
+            <h1 class="gradient-text">Neural Emotion Stream</h1>
+            <p>Real-time AI expression analysis</p>
+        </header>
+
+        <section class="app-layout">
+            <div class="video-container glass">
+                <div class="video-wrapper">
+                    <!-- Stream from Flask -->
+                    <img id="videoStream" src="{{ url_for('video_feed') }}" alt="Live camera feed" />
+                </div>
+                
+                <div class="controls status-bar">
+                    <span class="status-indicator live"></span>
+                    <span>System Active • Live Feed</span>
+                </div>
+            </div>
+
+            <aside class="sidebar glass">
+                <h2>Analysis Context</h2>
+                <p class="subtitle">Waiting for faces...</p>
+                
+                <ul class="features-list">
+                    <li><span class="icon">🚀</span> Low-Latency TensorFlow</li>
+                    <li><span class="icon">✨</span> ResNet Mini-Xception</li>
+                    <li><span class="icon">👁️</span> Real-time Face Tracking</li>
+                </ul>
+
+                <div class="stats-box">
+                    <h3>Status</h3>
+                    <div class="stat-row">
+                        <span>FPS Target</span>
+                        <span class="accent">30.0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Model</span>
+                        <span class="accent">FER2013</span>
+                    </div>
+                </div>
+                
+                <div class="note">
+                    Point camera at your face to see emotion metrics seamlessly superimposed in the feed.
+                </div>
+            </aside>
+        </section>
+    </main>
+</body>
+</html>
