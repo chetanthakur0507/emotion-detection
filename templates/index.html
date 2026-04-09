@@ -3,66 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Emotion Detector</title>
+    <title>Emotion Detector Pro</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.1/socket.io.min.js"></script>
 </head>
 <body>
-    <div class="blob-bg blob-1"></div>
-    <div class="blob-bg blob-2"></div>
+    <div class="hud-overlay"></div>
 
     <main class="container">
         <header>
-            <h1 class="gradient-text">Neural Emotion Stream</h1>
-            <p>Real-time AI expression analysis</p>
+            <h1 class="gradient-text">NEURAL HUD</h1>
+            <p class="subtitle-neon">Mobile Camera Sync Active</p>
         </header>
 
         <section class="app-layout">
+            <!-- Video Section -->
             <div class="video-container glass">
                 <div class="video-wrapper">
-                    <!-- Stream from Flask -->
-                    <img id="videoStream" src="{{ url_for('video_feed') }}" alt="Live camera feed" />
+                    <!-- Native HTML5 Video Feed -->
+                    <video id="videoElement" autoplay playsinline></video>
+                    <!-- HUD Scan Graphics Layer -->
+                    <canvas id="overlayCanvas"></canvas>
+                    
+                    <div class="scanline"></div>
                 </div>
                 
                 <div class="controls status-bar">
                     <span class="status-indicator live"></span>
-                    <span>System Active • Live Feed</span>
+                    <span class="status-text">UPLINK ACTIVE • CAMERA 01</span>
                 </div>
             </div>
 
+            <!-- Stats Sidebar -->
             <aside class="sidebar glass">
-                <h2>Analysis Context</h2>
-                <p class="subtitle">Waiting for faces...</p>
-                
-                <ul class="features-list">
-                    <li><span class="icon">🚀</span> Low-Latency TensorFlow</li>
-                    <li><span class="icon">✨</span> ResNet Mini-Xception</li>
-                    <li><span class="icon">👁️</span> Real-time Face Tracking</li>
-                </ul>
-
-                <div class="stats-box">
-                    <h3>Status</h3>
-                    <div class="stat-row">
-                        <span>FPS Target</span>
-                        <span class="accent">30.0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Model</span>
-                        <span class="accent">FER2013</span>
-                    </div>
+                <div class="hud-header">
+                    <h2>TELEMETRY</h2>
+                    <div class="pulse-ring"></div>
                 </div>
                 
-                <div class="note">
-                    Point camera at your face to see emotion metrics seamlessly superimposed in the feed.
+                <div class="primary-stat-box">
+                    <span class="stat-label">DOMINANT EMOTION</span>
+                    <div id="dynamic-emotion" class="stat-value neon-glow">SYNCING...</div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="system-stat">
+                        <span class="label">CONFIDENCE</span>
+                        <span class="value" id="dynamic-conf">--%</span>
+                    </div>
+                    <div class="system-stat">
+                        <span class="label">TARGETS</span>
+                        <span class="value" id="dynamic-faces">0</span>
+                    </div>
+                </div>
+
+                <ul class="features-list">
+                    <li><span class="icon">SYS</span> Engine: ResNet (Xception)</li>
+                    <li><span class="icon">TRK</span> Array: Edge Capture</li>
+                    <li><span class="icon">LAT</span> Link: Socket.IO</li>
+                </ul>
+
+                <progress id="confidence-bar" class="conf-bar" value="0" max="100"></progress>
+                
+                <div class="note" id="status-note">
+                    <span class="blink">></span> Requesting Camera Permissions...
                 </div>
             </aside>
         </section>
     </main>
+
+    <!-- Hidden canvas to grab video frame data for the server -->
+    <canvas id="hiddenCanvas" style="display:none;"></canvas>
+
+    <script>
+        const socket = io();
+        
+        const video = document.getElementById('videoElement');
+        const overlay = document.getElementById('overlayCanvas');
+        const ctxOverlay = overlay.getContext('2d');
+        const hiddenCanvas = document.getElementById('hiddenCanvas');
+        const ctxHidden = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+        
+        const emotionElem = document.getElementById('dynamic-emotion');
+        const confElem = document.getElementById('dynamic-conf');
+        const facesElem = document.getElementById('dynamic-faces');
+        const barElem = document.getElementById('confidence-bar');
+        const noteElem = document.getElementById('status-note');
+
+        const emotionColors = {
+            'Angry': '#ef4444', 'Disgust': '#22c55e', 'Fear': '#eab308',
+            'Happy': '#facc15', 'Sad': '#3b82f6', 'Surprise': '#d946ef',
+            'Neutral': '#94a3b8', 'No Face Detected': '#334155'
+        };
+
+        // 1. Kickstart Webcam
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } });
+                video.srcObject = stream;
+                noteElem.innerHTML = '<span class="blink">></span> Secure Feed Established.';
+                
+                // Set canvas sizes once video starts playing
+                video.onloadedmetadata = () => {
+                    overlay.width = video.videoWidth;
+                    overlay.height = video.videoHeight;
+                    hiddenCanvas.width = video.videoWidth;
+                    hiddenCanvas.height = video.videoHeight;
+                    // Start transmitting loop!
+                    setTimeout(sendFrame, 100);
+                };
+            } catch (err) {
+                noteElem.innerHTML = '<span style="color:red">>></span> Camera Access Denied or Missing!';
+                console.error(err);
+            }
+        }
+        
+        // 2. Transmit frame to Flask via Socket
+        function sendFrame() {
+            if (video.videoWidth === 0) return;
+            
+            // Draw current video frame to hidden canvas
+            ctxHidden.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            // Convert to highly compressed JPEG base64 string
+            const dataURL = hiddenCanvas.toDataURL('image/jpeg', 0.5);
+            
+            socket.emit('process_image', dataURL);
+        }
+
+        // 3. Receive predictions and draw HUD locally (so smooth!)
+        socket.on('result', (data) => {
+            // Immediately request next frame
+            setTimeout(sendFrame, 50);
+
+            const stats = data.stats;
+            emotionElem.textContent = stats.emotion.toUpperCase();
+            confElem.textContent = (stats.confidence * 100).toFixed(1) + '%';
+            facesElem.textContent = stats.faces_count;
+            barElem.value = stats.confidence * 100;
+
+            const baseColor = emotionColors[stats.emotion] || '#38bdf8';
+            emotionElem.style.color = baseColor;
+            emotionElem.style.textShadow = `0 0 15px ${baseColor}`;
+
+            // Clear the 2D overlay
+            ctxOverlay.clearRect(0, 0, overlay.width, overlay.height);
+
+            // Draw Sci-Fi HUD corners around faces
+            const len = 20;
+            ctxOverlay.lineWidth = 4;
+            ctxOverlay.font = "bold 24px Share Tech Mono";
+
+            data.faces.forEach(face => {
+                const color = emotionColors[face.emotion] || '#38bdf8';
+                ctxOverlay.strokeStyle = color;
+                ctxOverlay.fillStyle = color;
+                
+                let { x, y, w, h } = face;
+
+                // TL
+                ctxOverlay.beginPath(); ctxOverlay.moveTo(x, y+len); ctxOverlay.lineTo(x, y); ctxOverlay.lineTo(x+len, y); ctxOverlay.stroke();
+                // TR
+                ctxOverlay.beginPath(); ctxOverlay.moveTo(x+w-len, y); ctxOverlay.lineTo(x+w, y); ctxOverlay.lineTo(x+w, y+len); ctxOverlay.stroke();
+                // BL
+                ctxOverlay.beginPath(); ctxOverlay.moveTo(x, y+h-len); ctxOverlay.lineTo(x, y+h); ctxOverlay.lineTo(x+len, y+h); ctxOverlay.stroke();
+                // BR
+                ctxOverlay.beginPath(); ctxOverlay.moveTo(x+w-len, y+h); ctxOverlay.lineTo(x+w, y+h); ctxOverlay.lineTo(x+w, y+h-len); ctxOverlay.stroke();
+
+                // Draw Text Box above
+                ctxOverlay.globalAlpha = 0.5;
+                ctxOverlay.fillRect(x, y - 35, ctxOverlay.measureText(face.emotion).width + 20, 30);
+                
+                ctxOverlay.globalAlpha = 1.0;
+                ctxOverlay.fillStyle = "#fff";
+                ctxOverlay.fillText(face.emotion, x + 10, y - 12);
+            });
+        });
+
+        initCamera();
+
+    </script>
 </body>
 </html>
